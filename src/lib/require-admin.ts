@@ -1,13 +1,17 @@
 import { auth, currentUser } from "@clerk/nextjs/server"
-import { redirect } from "next/navigation"
 import { isAdminRole, resolveUserRole } from "@/lib/clerk-role"
 
-export default async function Home() {
+export async function requireAdmin() {
   const { userId, sessionClaims } = await auth()
-  if (!userId) redirect("/sign-in")
+  if (!userId) {
+    throw new Error("Unauthorized")
+  }
 
   const user = await currentUser()
   const role = resolveUserRole(sessionClaims, user)
-  if (isAdminRole(role)) redirect("/admin")
-  redirect("/dashboard")
+  if (!isAdminRole(role)) {
+    throw new Error("Forbidden")
+  }
+
+  return { userId, user }
 }

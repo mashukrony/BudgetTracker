@@ -13,7 +13,7 @@ export default function SignUpPage() {
     >
       <div className="absolute inset-0 bg-black/55" aria-hidden />
       <div className="relative z-10 w-full max-w-md">
-        <SignUp />
+        <SignUp forceRedirectUrl="/auth/post-sign-in" fallbackRedirectUrl="/auth/post-sign-in" />
       </div>
     </div>
   )

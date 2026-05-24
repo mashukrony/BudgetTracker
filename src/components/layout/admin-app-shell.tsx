@@ -3,17 +3,16 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { SignOutButton } from "@clerk/nextjs"
 import {
   LayoutDashboard,
   LogOut,
   MessageSquareText,
-  Shield,
   User,
   Users,
 } from "lucide-react"
 import appLogo from "@/components/images/AppLogo.png"
-import { useBudgetApp } from "@/contexts/budget-app-context"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { ClerkUserButton } from "@/components/layout/clerk-user-button"
 import {
   Sidebar,
   SidebarContent,
@@ -44,7 +43,6 @@ const mobileSheetSurface =
 
 export function AdminAppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const { adminDisplayName, logout } = useBudgetApp()
 
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href)
@@ -88,15 +86,17 @@ export function AdminAppShell({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="border-t border-white/15 p-2 group-data-[collapsible=icon]:p-1.5">
-          <Button
-            variant="ghost"
-            title="Log out"
-            className="w-full justify-start gap-2 text-white hover:bg-white/15 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0"
-            onClick={logout}
-          >
-            <LogOut className="size-4 shrink-0" />
-            <span className="group-data-[collapsible=icon]:hidden">Log out</span>
-          </Button>
+          <SignOutButton redirectUrl="/sign-in">
+            <Button
+              variant="ghost"
+              title="Log out"
+              type="button"
+              className="w-full justify-start gap-2 text-white hover:bg-white/15 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0"
+            >
+              <LogOut className="size-4 shrink-0" />
+              <span className="group-data-[collapsible=icon]:hidden">Log out</span>
+            </Button>
+          </SignOutButton>
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
@@ -109,12 +109,7 @@ export function AdminAppShell({ children }: { children: React.ReactNode }) {
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <Shield className="hidden size-[18px] text-muted-foreground sm:block" aria-hidden />
-            <Avatar className="size-9 ring-2 ring-primary/25">
-              <AvatarFallback className="bg-primary/10 text-sm font-semibold">
-                {adminDisplayName.slice(0, 1).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <ClerkUserButton />
           </div>
         </header>
         <div className="flex flex-1 flex-col">{children}</div>

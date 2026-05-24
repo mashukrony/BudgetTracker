@@ -3,7 +3,7 @@ import { ClerkProvider } from "@clerk/nextjs"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import { Providers } from "@/components/providers"
-import { ClerkAuthHeader } from "@/components/layout/clerk-auth-header"
+import { AuthSignOutRedirect } from "@/components/layout/auth-sign-out-redirect"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,8 +31,15 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} flex min-h-full flex-col antialiased`}
       >
-        <ClerkProvider>
-          <ClerkAuthHeader />
+        <ClerkProvider
+          signInFallbackRedirectUrl="/auth/post-sign-in"
+          signUpFallbackRedirectUrl="/auth/post-sign-in"
+          signInForceRedirectUrl="/auth/post-sign-in"
+          signUpForceRedirectUrl="/auth/post-sign-in"
+          afterSignOutUrl="/sign-in"
+          afterMultiSessionSingleSignOutUrl="/sign-in"
+        >
+          <AuthSignOutRedirect />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <Providers>{children}</Providers>
           </div>

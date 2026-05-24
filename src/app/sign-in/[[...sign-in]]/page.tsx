@@ -13,7 +13,7 @@ export default function SignInPage() {
     >
       <div className="absolute inset-0 bg-black/55" aria-hidden />
       <div className="relative z-10 w-full max-w-md">
-        <SignIn />
+        <SignIn forceRedirectUrl="/auth/post-sign-in" fallbackRedirectUrl="/auth/post-sign-in" />
       </div>
     </div>
   )

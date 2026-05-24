@@ -1,0 +1,83 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String         @id // Matches Clerk's unique User ID string exactly
+  email         String         @unique
+  username      String?        // Reflects Clerk's customizable username property
+  currency      String         @default("USD")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  budgets       Budget[]
+  transactions  Transaction[]
+  categories    Category[]
+  tickets       SupportTicket[]
+  notifications Notification[]
+}
+
+model Budget {
+  id        String   @id @default(cuid())
+  amount    Float
+  month     DateTime // Tracks calendar months (e.g., 2026-05-01) for temporal budgeting
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id           String        @id @default(cuid())
+  name         String
+  allocatedAmt Float         @default(0.0)
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  title       String
+  amount      Float
+  type        String   // Tracked strictly via string types: "INCOME" or "EXPENSE"
+  date        DateTime @default(now())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+}
+
+model SupportTicket {
+  id          String   @id @default(cuid())
+  subject     String
+  message     String
+  status      String   @default("OPEN") // "OPEN", "RESOLVED", "CLOSED"
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  isRead      Boolean  @default(false)
+  type        String   // Category triggers: "BUDGET_EXCEEDED", "SYSTEM_ALERT", "REMINDER"
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+}

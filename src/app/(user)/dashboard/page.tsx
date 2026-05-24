@@ -37,8 +37,16 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import type { CurrencyCode } from "@/lib/types"
+import type { UserBudgetSnapshot } from "@/lib/queries/user-snapshot"
 
 const MONTH_NAME = new Date().toLocaleString("default", { month: "long" })
+
+function formatDelta(pct: number | null, kind: "income" | "expense"): string {
+  if (pct === null) return "No prior-month data"
+  const sign = pct > 0 ? "+" : ""
+  const label = kind === "income" ? "income" : "spend"
+  return `${sign}${pct}% vs last month (${label})`
+}
 
 function categoryIcon(categoryName: string) {
   const n = categoryName.toLowerCase()
@@ -62,6 +70,10 @@ export default function DashboardPage() {
     categories,
     spendMap,
     transactions,
+    periodComparison,
+    incomeDeltaPct,
+    expenseDeltaPct,
+    isIncomeCategory,
   } = useBudgetApp()
 
   const [activePie, setActivePie] = React.useState<number | undefined>(undefined)
@@ -76,7 +88,7 @@ export default function DashboardPage() {
   const pieData = rawPie.filter((d) => d.value > 0)
 
   const barRows = categories
-    .filter((c) => c.id !== "cat-income")
+    .filter((c) => !isIncomeCategory(c))
     .map((c) => ({
       name: c.name.length > 12 ? `${c.name.slice(0, 11)}…` : c.name,
       spent: Math.round(spendMap[c.id] ?? 0),
@@ -85,7 +97,7 @@ export default function DashboardPage() {
     .filter((row) => row.budget > 0)
 
   const topCategories = [...categories]
-    .filter((c) => c.id !== "cat-income" && c.budgetAllocated > 0)
+    .filter((c) => !isIncomeCategory(c) && c.budgetAllocated > 0)
     .map((c) => ({
       ...c,
       spent: spendMap[c.id] ?? 0,
@@ -127,15 +139,15 @@ export default function DashboardPage() {
         <StatCard
           title="Monthly income"
           value={formatMoney(monthlyIncome, currencyCode)}
-          delta="+2.5% vs last month"
-          positive
+          delta={formatDelta(incomeDeltaPct, "income")}
+          positive={(incomeDeltaPct ?? 0) >= 0}
           accent="border-l-emerald-500"
         />
         <StatCard
           title="Total expenses"
           value={formatMoney(totalExpenseThisMonth, currencyCode)}
-          delta="+12% vs last month"
-          positive={false}
+          delta={formatDelta(expenseDeltaPct, "expense")}
+          positive={(expenseDeltaPct ?? 0) <= 0}
           accent="border-l-orange-400"
         />
         <StatCard
@@ -316,7 +328,12 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <CompareDialog open={compareOpen} onOpenChange={setCompareOpen} currencyCode={currencyCode} />
+      <CompareDialog
+        open={compareOpen}
+        onOpenChange={setCompareOpen}
+        currencyCode={currencyCode}
+        comparison={periodComparison}
+      />
     </div>
   )
 }
@@ -356,16 +373,19 @@ function CompareDialog({
   open,
   onOpenChange,
   currencyCode,
+  comparison,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   currencyCode: CurrencyCode
+  comparison: UserBudgetSnapshot["periodComparison"]
 }) {
+  const { previous: prev, current: cur } = comparison
   const rows = [
-    { metric: "Budget", prev: 8200, cur: 8500 },
-    { metric: "Spent", prev: 5400, cur: 6240 },
-    { metric: "Remaining", prev: 2800, cur: 2260 },
-    { metric: "Top category", prev: "Food", cur: "Shopping" },
+    { metric: "Budget", prev: prev.budget, cur: cur.budget },
+    { metric: "Spent", prev: prev.spent, cur: cur.spent },
+    { metric: "Remaining", prev: prev.remaining, cur: cur.remaining },
+    { metric: "Top category", prev: prev.topCategoryName, cur: cur.topCategoryName },
   ]
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -373,8 +393,7 @@ function CompareDialog({
         <DialogHeader>
           <DialogTitle>Compare with last month</DialogTitle>
           <DialogDescription>
-            Placeholder insights until historical data from your backend is wired in — useful for trend
-            cards and pacing alerts.
+            Aggregated from your Neon PostgreSQL budgets and expense transactions.
           </DialogDescription>
         </DialogHeader>
         <Table>

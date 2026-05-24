@@ -1,7 +1,10 @@
 import { auth, currentUser } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { UserAppShell } from "@/components/layout/user-app-shell"
+import { BudgetAppProvider } from "@/contexts/budget-app-context"
+import { ensureDbUser } from "@/lib/ensure-user"
 import { isAdminRole, resolveUserRole } from "@/lib/clerk-role"
+import { getUserBudgetSnapshot } from "@/lib/queries/user-snapshot"
 
 export default async function UserLayout({ children }: { children: React.ReactNode }) {
   const { userId, sessionClaims } = await auth()
@@ -11,5 +14,13 @@ export default async function UserLayout({ children }: { children: React.ReactNo
   const role = resolveUserRole(sessionClaims, user)
   if (isAdminRole(role)) redirect("/admin")
 
-  return <UserAppShell>{children}</UserAppShell>
+  if (user) await ensureDbUser(user)
+
+  const snapshot = await getUserBudgetSnapshot(userId)
+
+  return (
+    <UserAppShell>
+      <BudgetAppProvider initial={snapshot}>{children}</BudgetAppProvider>
+    </UserAppShell>
+  )
 }

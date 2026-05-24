@@ -35,7 +35,9 @@ export default function CategoriesPage() {
     updateCategory,
     deleteCategory,
     spendMap,
+    isIncomeCategory,
   } = useBudgetApp()
+  const [saving, setSaving] = React.useState(false)
 
   const [dialog, setDialog] = React.useState<
     null | { mode: "create" } | { mode: "edit"; category: Category }
@@ -56,17 +58,24 @@ export default function CategoriesPage() {
     setDialog({ mode: "edit", category: c })
   }
 
-  const save = () => {
+  const save = async () => {
     const b = Number.parseFloat(budget.replace(/,/g, ""))
     if (!name.trim() || !Number.isFinite(b) || b < 0) return
-    if (dialog?.mode === "create") addCategory(name, b)
-    if (dialog?.mode === "edit") updateCategory(dialog.category.id, name, b)
-    setDialog(null)
+    setSaving(true)
+    try {
+      if (dialog?.mode === "create") await addCategory(name, b)
+      if (dialog?.mode === "edit") await updateCategory(dialog.category.id, name, b)
+      setDialog(null)
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not save category.")
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const count = categories.filter((c) => c.id !== "cat-income").length
+  const count = categories.filter((c) => !isIncomeCategory(c)).length
 
-  const budgetCategories = categories.filter((c) => c.id !== "cat-income")
+  const budgetCategories = categories.filter((c) => !isIncomeCategory(c))
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 md:px-8">
@@ -126,7 +135,7 @@ export default function CategoriesPage() {
                             size="icon-sm"
                             variant="ghost"
                             className="text-muted-foreground hover:text-destructive"
-                            onClick={() => deleteCategory(c.id)}
+                            onClick={() => void deleteCategory(c.id).catch((e) => window.alert(e.message))}
                             aria-label="Delete category"
                           >
                             <Trash2 className="size-4" />
@@ -169,8 +178,12 @@ export default function CategoriesPage() {
             <Button variant="outline" onClick={() => setDialog(null)}>
               Cancel
             </Button>
-            <Button className="bg-[#667eea] hover:bg-[#5b21b6]" onClick={save}>
-              Save
+            <Button
+              className="bg-[#667eea] hover:bg-[#5b21b6]"
+              disabled={saving}
+              onClick={() => void save()}
+            >
+              {saving ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,0 +1,128 @@
+"use server"
+
+import { revalidatePath } from "next/cache"
+import { requireDbSession } from "@/lib/auth-session"
+import { prisma } from "@/lib/prisma"
+import { mapCategory, mapTransaction, txTypeToDb } from "@/lib/mappers"
+import { endOfMonth, startOfMonth } from "@/lib/month-range"
+import { spendByCategory } from "@/lib/spend-utils"
+import type { TxType } from "@/lib/types"
+
+const USER_PATHS = [
+  "/dashboard",
+  "/budget",
+  "/spend-by-categories",
+  "/categories",
+  "/transactions",
+  "/notifications",
+]
+
+function revalidateUserApp() {
+  for (const path of USER_PATHS) revalidatePath(path)
+}
+
+async function maybeCreateBudgetAlert(userId: string, categoryId: string) {
+  const monthStart = startOfMonth()
+  const monthEnd = endOfMonth()
+
+  const category = await prisma.category.findFirst({
+    where: { id: categoryId, userId },
+  })
+  if (!category || category.allocatedAmt <= 0) return
+
+  const [categories, transactions] = await Promise.all([
+    prisma.category.findMany({ where: { userId } }),
+    prisma.transaction.findMany({
+      where: { userId, date: { gte: monthStart, lte: monthEnd }, type: "EXPENSE" },
+    }),
+  ])
+
+  const mappedCategories = categories.map(mapCategory)
+  const mappedTransactions = transactions.map(mapTransaction)
+  const spendMap = spendByCategory(mappedTransactions, mappedCategories, monthStart, monthEnd)
+  const spent = spendMap[categoryId] ?? 0
+
+  if (spent < category.allocatedAmt) return
+
+  const type = spent > category.allocatedAmt ? "BUDGET_EXCEEDED" : "SYSTEM_ALERT"
+  const title = `${category.name} budget`
+  const message =
+    spent > category.allocatedAmt
+      ? `Spending exceeded the budget for ${category.name}.`
+      : `You reached the planned budget cap for ${category.name}.`
+
+  const recent = await prisma.notification.findFirst({
+    where: {
+      userId,
+      type,
+      title,
+      createdAt: { gte: monthStart },
+    },
+    orderBy: { createdAt: "desc" },
+  })
+
+  if (recent) return
+
+  await prisma.notification.create({
+    data: { userId, title, message, type },
+  })
+}
+
+export async function createTransaction(input: {
+  title: string
+  categoryId: string
+  date: string
+  amount: number
+  type: TxType
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const title = input.title.trim()
+  if (!title) return { ok: false, error: "Title is required." }
+  if (!input.categoryId) return { ok: false, error: "Category is required." }
+  if (!Number.isFinite(input.amount) || input.amount <= 0) {
+    return { ok: false, error: "Enter a valid amount." }
+  }
+
+  const parsedDate = new Date(input.date)
+  if (Number.isNaN(parsedDate.getTime())) {
+    return { ok: false, error: "Enter a valid date." }
+  }
+
+  const { userId } = await requireDbSession()
+
+  const category = await prisma.category.findFirst({
+    where: { id: input.categoryId, userId },
+  })
+  if (!category) return { ok: false, error: "Category not found." }
+
+  await prisma.transaction.create({
+    data: {
+      title,
+      categoryId: input.categoryId,
+      date: parsedDate,
+      amount: input.amount,
+      type: txTypeToDb(input.type),
+      userId,
+    },
+  })
+
+  if (input.type === "expense") {
+    await maybeCreateBudgetAlert(userId, input.categoryId)
+  }
+
+  revalidateUserApp()
+  return { ok: true }
+}
+
+export async function deleteTransaction(
+  id: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { userId } = await requireDbSession()
+
+  const existing = await prisma.transaction.findFirst({ where: { id, userId } })
+  if (!existing) return { ok: false, error: "Transaction not found." }
+
+  await prisma.transaction.delete({ where: { id } })
+
+  revalidateUserApp()
+  return { ok: true }
+}

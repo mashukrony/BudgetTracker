@@ -1,7 +1,7 @@
 "use client"
 
 import { Mail, Trash2 } from "lucide-react"
-import { useBudgetApp } from "@/contexts/budget-app-context"
+import { useAdminApp } from "@/contexts/admin-app-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table"
 
 export default function AdminQaPage() {
-  const { supportMessages, deleteSupportMessage } = useBudgetApp()
+  const { supportMessages, deleteSupportMessage } = useAdminApp()
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 md:px-8">
@@ -28,7 +28,7 @@ export default function AdminQaPage() {
       <Card className="overflow-hidden border-border/80 shadow-sm">
         <CardHeader className="border-b">
           <CardTitle className="text-lg">Inbox</CardTitle>
-          <CardDescription>Delete removes the row from admin view only in this demo layer.</CardDescription>
+          <CardDescription>Delete permanently removes the ticket from PostgreSQL.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -89,7 +89,9 @@ export default function AdminQaPage() {
                             size="icon-sm"
                             variant="ghost"
                             className="text-destructive hover:text-destructive"
-                            onClick={() => deleteSupportMessage(m.id)}
+                            onClick={() =>
+                              void deleteSupportMessage(m.id).catch((e) => window.alert(e.message))
+                            }
                           >
                             <Trash2 className="size-4" />
                           </Button>

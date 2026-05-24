@@ -29,20 +29,3 @@ export interface AppNotification {
   kind: string
 }
 
-export interface SupportMessage {
-  id: string
-  username: string
-  email: string
-  subject: string
-  message: string
-  submittedAt: string
-}
-
-export interface DemoUser {
-  id: string
-  name: string
-  email: string
-  joinDate: string
-  status: "Active" | "Suspended" | "Inactive"
-  lastActive: string
-}

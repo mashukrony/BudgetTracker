@@ -32,6 +32,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import type { Category } from "@/lib/types"
+
+function categoryNameById(categories: Category[], id: string | null, fallback: string) {
+  if (!id) return fallback
+  if (id === "all") return "All categories"
+  return categories.find((c) => c.id === id)?.name ?? fallback
+}
+
 export default function TransactionsPage() {
   const { currencyCode, categories, transactions, addTransaction } = useBudgetApp()
   const [from, setFrom] = React.useState("")
@@ -155,12 +163,16 @@ export default function TransactionsPage() {
               }}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="All categories" />
+                <SelectValue placeholder="All categories">
+                  {(value) => categoryNameById(categories, value, "All categories")}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
+                <SelectItem value="all" label="All categories">
+                  All categories
+                </SelectItem>
                 {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
+                  <SelectItem key={c.id} value={c.id} label={c.name}>
                     {c.name}
                   </SelectItem>
                 ))}
@@ -239,9 +251,13 @@ export default function TransactionsPage() {
         open={addOpen}
         onOpenChange={setAddOpen}
         categories={categories}
-        onAdd={(row) => {
-          addTransaction(row)
-          setAddOpen(false)
+        onAdd={async (row) => {
+          try {
+            await addTransaction(row)
+            setAddOpen(false)
+          } catch (err) {
+            window.alert(err instanceof Error ? err.message : "Could not save transaction.")
+          }
         }}
       />
     </div>
@@ -282,7 +298,7 @@ function AddTransactionDialog({
   open: boolean
   onOpenChange: (o: boolean) => void
   categories: ReturnType<typeof useBudgetApp>["categories"]
-  onAdd: (t: Omit<Transaction, "id">) => void
+  onAdd: (t: Omit<Transaction, "id">) => void | Promise<void>
 }) {
   const [title, setTitle] = React.useState("")
   const [categoryId, setCategoryId] = React.useState(categories[0]?.id ?? "")
@@ -324,19 +340,26 @@ function AddTransactionDialog({
     rec.start()
   }
 
-  const submit = () => {
+  const [saving, setSaving] = React.useState(false)
+
+  const submit = async () => {
     const n = Number.parseFloat(amount.replace(/,/g, ""))
     if (!title.trim() || !categoryId || !Number.isFinite(n) || n <= 0) return
-    onAdd({
-      title: title.trim(),
-      categoryId,
-      date,
-      amount: n,
-      type,
-    })
-    setTitle("")
-    setAmount("")
-    setDate(new Date().toISOString().slice(0, 10))
+    setSaving(true)
+    try {
+      await onAdd({
+        title: title.trim(),
+        categoryId,
+        date,
+        amount: n,
+        type,
+      })
+      setTitle("")
+      setAmount("")
+      setDate(new Date().toISOString().slice(0, 10))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -376,11 +399,13 @@ function AddTransactionDialog({
               }}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Choose category" />
+                <SelectValue placeholder="Choose category">
+                  {(value) => categoryNameById(categories, value, "Choose category")}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
+                  <SelectItem key={c.id} value={c.id} label={c.name}>
                     {c.name}
                   </SelectItem>
                 ))}
@@ -422,8 +447,12 @@ function AddTransactionDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button className="bg-[#667eea] hover:bg-[#5b21b6]" onClick={submit}>
-            Save
+          <Button
+            className="bg-[#667eea] hover:bg-[#5b21b6]"
+            disabled={saving}
+            onClick={() => void submit()}
+          >
+            {saving ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>

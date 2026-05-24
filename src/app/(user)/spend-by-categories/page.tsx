@@ -25,10 +25,11 @@ import {
 } from "@/components/ui/table"
 
 export default function SpendByCategoriesPage() {
-  const { currencyCode, categories, spendMap, monthlyBudget, overallRemaining } = useBudgetApp()
+  const { currencyCode, categories, spendMap, monthlyBudget, overallRemaining, isIncomeCategory } =
+    useBudgetApp()
 
   const rows = categories
-    .filter((c) => c.id !== "cat-income")
+    .filter((c) => !isIncomeCategory(c))
     .map((c) => {
       const spent = spendMap[c.id] ?? 0
       const remaining = Math.max(0, c.budgetAllocated - spent)
@@ -45,7 +46,7 @@ export default function SpendByCategoriesPage() {
   const exceeded = rows.filter((r) => r.over).length
 
   const allocatedOverall = categories
-    .filter((c) => c.id !== "cat-income")
+    .filter((c) => !isIncomeCategory(c))
     .reduce((s, c) => s + c.budgetAllocated, 0)
 
   const chartRows = rows.map((r) => ({

@@ -16,6 +16,7 @@ export default function BudgetPage() {
     categories,
     spendMap,
     totalExpenseThisMonth,
+    isIncomeCategory,
   } = useBudgetApp()
 
   const [draft, setDraft] = React.useState(monthlyBudget.toString())
@@ -25,14 +26,23 @@ export default function BudgetPage() {
   }, [monthlyBudget])
 
   const assigned = categories.filter(
-    (c) => c.id !== "cat-income" && c.budgetAllocated > 0
+    (c) => !isIncomeCategory(c) && c.budgetAllocated > 0
   )
   const overCount = assigned.filter((c) => (spendMap[c.id] ?? 0) > c.budgetAllocated).length
 
-  const applyBudget = () => {
+  const [saving, setSaving] = React.useState(false)
+
+  const applyBudget = async () => {
     const n = Number.parseFloat(draft.replace(/,/g, ""))
     if (!Number.isFinite(n) || n < 0) return
-    setMonthlyBudget(n)
+    setSaving(true)
+    try {
+      await setMonthlyBudget(n)
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not save budget.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -61,8 +71,13 @@ export default function BudgetPage() {
               placeholder="e.g. 8500"
             />
           </div>
-          <Button className="bg-[#667eea] hover:bg-[#5b21b6]" type="button" onClick={applyBudget}>
-            Save budget
+          <Button
+            className="bg-[#667eea] hover:bg-[#5b21b6]"
+            type="button"
+            disabled={saving}
+            onClick={() => void applyBudget()}
+          >
+            {saving ? "Saving…" : "Save budget"}
           </Button>
         </CardContent>
       </Card>

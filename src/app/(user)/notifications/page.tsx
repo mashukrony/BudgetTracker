@@ -39,8 +39,8 @@ export default function NotificationsPage() {
             What generates these?
           </CardTitle>
           <CardDescription>
-            Category limits, recurring payments (when synced), monthly savings versus plan, and ranked
-            spending insights. Wire your rules or backend to replace this demo behavior.
+            Category limits, budget breaches, and system alerts — generated from your live transactions
+            and stored in PostgreSQL.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -60,7 +60,9 @@ export default function NotificationsPage() {
               body={n.body}
               createdAt={n.createdAt}
               hint={TRIGGER_HINTS[n.kind] ?? "System notification"}
-              onDelete={() => deleteNotification(n.id)}
+              onDelete={() =>
+                void deleteNotification(n.id).catch((e) => window.alert(e.message))
+              }
             />
           ))
         )}

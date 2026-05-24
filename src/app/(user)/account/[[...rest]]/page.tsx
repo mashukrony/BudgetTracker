@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { UserProfile } from "@clerk/nextjs"
 import { useBudgetApp } from "@/contexts/budget-app-context"
 import type { CurrencyCode } from "@/lib/types"
@@ -17,6 +18,7 @@ const CUR: CurrencyCode[] = ["MYR", "USD", "EUR", "GBP", "SGD"]
 
 export default function AccountPage() {
   const { currencyCode, setCurrencyCode } = useBudgetApp()
+  const [saving, setSaving] = React.useState(false)
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-8 md:px-8">
@@ -41,7 +43,7 @@ export default function AccountPage() {
       <Card className="border-border/80 shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg">App preferences</CardTitle>
-          <CardDescription>Currency used for budgets and amounts in this demo.</CardDescription>
+          <CardDescription>Currency used for budgets and amounts across the app.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="space-y-2">
@@ -49,8 +51,13 @@ export default function AccountPage() {
             <Select
               value={currencyCode}
               onValueChange={(v) => {
-                if (v) setCurrencyCode(v as CurrencyCode)
+                if (!v) return
+                setSaving(true)
+                void setCurrencyCode(v as CurrencyCode)
+                  .catch((e) => window.alert(e.message))
+                  .finally(() => setSaving(false))
               }}
+              disabled={saving}
             >
               <SelectTrigger className="w-full max-w-xs">
                 <SelectValue />

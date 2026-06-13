@@ -41,7 +41,16 @@ function categoryNameById(categories: Category[], id: string | null, fallback: s
 }
 
 export default function TransactionsPage() {
-  const { currencyCode, categories, transactions, addTransaction } = useBudgetApp()
+  const { currencyCode, categories, transactions, addTransaction, isIncomeCategory } =
+    useBudgetApp()
+  const expenseCategories = React.useMemo(
+    () => categories.filter((c) => !isIncomeCategory(c)),
+    [categories, isIncomeCategory]
+  )
+  const incomeCategoryId = React.useMemo(
+    () => categories.find((c) => isIncomeCategory(c))?.id ?? "",
+    [categories, isIncomeCategory]
+  )
   const [from, setFrom] = React.useState("")
   const [to, setTo] = React.useState("")
   const [categoryFilter, setCategoryFilter] = React.useState<string>("all")
@@ -250,7 +259,8 @@ export default function TransactionsPage() {
       <AddTransactionDialog
         open={addOpen}
         onOpenChange={setAddOpen}
-        categories={categories}
+        expenseCategories={expenseCategories}
+        incomeCategoryId={incomeCategoryId}
         onAdd={async (row) => {
           try {
             await addTransaction(row)
@@ -292,26 +302,31 @@ function StatMini({
 function AddTransactionDialog({
   open,
   onOpenChange,
-  categories,
+  expenseCategories,
+  incomeCategoryId,
   onAdd,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
-  categories: ReturnType<typeof useBudgetApp>["categories"]
+  expenseCategories: ReturnType<typeof useBudgetApp>["categories"]
+  incomeCategoryId: string
   onAdd: (t: Omit<Transaction, "id">) => void | Promise<void>
 }) {
   const [title, setTitle] = React.useState("")
-  const [categoryId, setCategoryId] = React.useState(categories[0]?.id ?? "")
+  const [categoryId, setCategoryId] = React.useState("")
   const [date, setDate] = React.useState(() => new Date().toISOString().slice(0, 10))
   const [amount, setAmount] = React.useState("")
   const [type, setType] = React.useState<TxType>("expense")
   const [listening, setListening] = React.useState(false)
 
   React.useEffect(() => {
-    if (categories.length && !categories.some((c) => c.id === categoryId)) {
-      setCategoryId(categories[0].id)
-    }
-  }, [categories, categoryId])
+    if (!open) return
+    setCategoryId(expenseCategories[0]?.id ?? "")
+    setTitle("")
+    setAmount("")
+    setType("expense")
+    setDate(new Date().toISOString().slice(0, 10))
+  }, [open, expenseCategories])
 
   const startSpeech = () => {
     const w = typeof window !== "undefined" ? (window as SpeechRecognitionHost) : undefined
@@ -342,14 +357,26 @@ function AddTransactionDialog({
 
   const [saving, setSaving] = React.useState(false)
 
+  const amountValid = React.useMemo(() => {
+    const n = Number.parseFloat(amount.replace(/,/g, ""))
+    return Number.isFinite(n) && n > 0
+  }, [amount])
+
+  const canSave =
+    title.trim().length > 0 &&
+    amountValid &&
+    (type === "income" ? !!incomeCategoryId : !!categoryId)
+
   const submit = async () => {
     const n = Number.parseFloat(amount.replace(/,/g, ""))
-    if (!title.trim() || !categoryId || !Number.isFinite(n) || n <= 0) return
+    if (!title.trim() || !Number.isFinite(n) || n <= 0) return
+    const resolvedCategoryId = type === "income" ? incomeCategoryId : categoryId
+    if (!resolvedCategoryId) return
     setSaving(true)
     try {
       await onAdd({
         title: title.trim(),
-        categoryId,
+        categoryId: resolvedCategoryId,
         date,
         amount: n,
         type,
@@ -391,41 +418,6 @@ function AddTransactionDialog({
             <Input id="t-title" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className="grid gap-2">
-            <Label>Category</Label>
-            <Select
-              value={categoryId}
-              onValueChange={(v) => {
-                if (v) setCategoryId(v)
-              }}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Choose category">
-                  {(value) => categoryNameById(categories, value, "Choose category")}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id} label={c.name}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="t-date">Date</Label>
-            <Input id="t-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="t-amt">Amount</Label>
-            <Input
-              id="t-amt"
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </div>
-          <div className="grid gap-2">
             <Label>Type</Label>
             <Select
               value={type}
@@ -442,6 +434,53 @@ function AddTransactionDialog({
               </SelectContent>
             </Select>
           </div>
+          {type === "expense" ? (
+            <div className="grid gap-2">
+              <Label>Category</Label>
+              <Select
+                value={categoryId || undefined}
+                onValueChange={(v) => {
+                  if (v) setCategoryId(v)
+                }}
+                disabled={expenseCategories.length === 0}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose category">
+                    {(value) => categoryNameById(expenseCategories, value, "Choose category")}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {expenseCategories.map((c) => (
+                    <SelectItem key={c.id} value={c.id} label={c.name}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {expenseCategories.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Create an expense category on the Categories page before recording spending.
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Income is recorded without a budget category.
+            </p>
+          )}
+          <div className="grid gap-2">
+            <Label htmlFor="t-date">Date</Label>
+            <Input id="t-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="t-amt">Amount</Label>
+            <Input
+              id="t-amt"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -449,7 +488,7 @@ function AddTransactionDialog({
           </Button>
           <Button
             className="bg-[#667eea] hover:bg-[#5b21b6]"
-            disabled={saving}
+            disabled={saving || !canSave}
             onClick={() => void submit()}
           >
             {saving ? "Saving…" : "Save"}

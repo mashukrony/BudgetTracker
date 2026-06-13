@@ -18,6 +18,10 @@ import { Textarea } from "@/components/ui/textarea"
 
 const FAQ = [
   {
+    q: "How to use the application?",
+    a: "This application helps you track your expenses and gives you alerts and spending insights against the budget set. Simply navigate to the 'Budget' page and set a budget. Navigate to the 'Categories' page to create categories and assign individual spending limits. Navigate to the 'Transactions' page to record your transactions. Check the dashboard for spending insights. Chat with the BudgetBuddy AI chatbot about anything related to financial tips, tricks, and information related to the system. Happy on board!",
+  },
+  {
     q: "How does BudgetTracker notify me?",
     a: "In-app alerts are stored in PostgreSQL when category spend reaches or exceeds your allocated budget.",
   },
@@ -29,6 +33,7 @@ const FAQ = [
     q: "Is my data synced to the cloud?",
     a: "Yes — budgets, categories, transactions, and tickets are persisted in your Neon PostgreSQL database.",
   },
+
 ]
 
 export default function HelpSupportPage() {

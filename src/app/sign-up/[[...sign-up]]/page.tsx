@@ -1,5 +1,5 @@
 import { SignUp } from "@clerk/nextjs"
-import loginBackground from "@/components/images/BackgroundLogin.png"
+import loginBackground from "@/components/images/background1.jpg"
 
 export default function SignUpPage() {
   return (

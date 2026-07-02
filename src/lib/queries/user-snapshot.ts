@@ -91,7 +91,7 @@ export async function getUserBudgetSnapshot(userId: string): Promise<UserBudgetS
   const prevMonthStart = previousMonthStart(now)
   const prevMonthEnd = endOfMonth(prevMonthStart)
 
-  const [dbUser, categories, transactions, notifications, currentBudget, prevBudget] =
+  const [dbUser, categories, transactions, notifications, currentBudget, prevBudget, latestBudget] =
     await Promise.all([
       prisma.user.findUniqueOrThrow({ where: { id: userId } }),
       prisma.category.findMany({ where: { userId }, orderBy: { name: "asc" } }),
@@ -110,11 +110,15 @@ export async function getUserBudgetSnapshot(userId: string): Promise<UserBudgetS
       prisma.budget.findFirst({
         where: { userId, month: prevMonthStart },
       }),
+      prisma.budget.findFirst({
+        where: { userId },
+        orderBy: { month: "desc" },
+      }),
     ])
 
   const mappedCategories = categories.map(mapCategory)
   const mappedTransactions = transactions.map(mapTransaction)
-  const monthlyBudget = currentBudget?.amount ?? 0
+  const monthlyBudget = currentBudget?.amount ?? latestBudget?.amount ?? 0
   const prevMonthlyBudget = prevBudget?.amount ?? 0
 
   const spendMap = spendByCategory(

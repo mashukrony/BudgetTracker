@@ -14,6 +14,7 @@ const USER_PATHS = [
 ]
 
 function revalidateUserApp() {
+  revalidatePath("/dashboard", "layout")
   for (const path of USER_PATHS) revalidatePath(path)
 }
 

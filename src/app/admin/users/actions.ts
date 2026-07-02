@@ -3,6 +3,7 @@
 import { clerkClient } from "@clerk/nextjs/server"
 import { revalidatePath } from "next/cache"
 import { mapClerkUserToRow, type AdminUserRow } from "@/lib/admin-users"
+import { deleteUserFromDatabase } from "@/lib/delete-user-data"
 import { requireAdmin } from "@/lib/require-admin"
 
 const USERS_PATH = "/admin/users"
@@ -118,8 +119,28 @@ export async function deleteClerkUser(
 
   try {
     const client = await clerkClient()
-    await client.users.deleteUser(userId)
+
+    let email: string | null = null
+    let clerkUserExists = true
+    try {
+      const clerkUser = await client.users.getUser(userId)
+      const primaryId = clerkUser.primaryEmailAddressId
+      email = primaryId
+        ? (clerkUser.emailAddresses.find((e) => e.id === primaryId)?.emailAddress ?? null)
+        : (clerkUser.emailAddresses[0]?.emailAddress ?? null)
+    } catch {
+      clerkUserExists = false
+    }
+
+    await deleteUserFromDatabase(userId, email)
+
+    if (clerkUserExists) {
+      await client.users.deleteUser(userId)
+    }
+
     revalidatePath(USERS_PATH)
+    revalidatePath("/admin")
+    revalidatePath("/admin/qa")
     return { ok: true }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not delete user."

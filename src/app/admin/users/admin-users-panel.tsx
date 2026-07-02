@@ -204,7 +204,7 @@ export function AdminUsersPanel({ initialUsers }: Props) {
                             onClick={() => {
                               if (
                                 !window.confirm(
-                                  `Delete ${user.email ?? user.username ?? "this user"}? This cannot be undone.`
+                                  `Delete ${user.email ?? user.username ?? "this user"}? Their Clerk account and all budget data in the database will be permanently removed.`
                                 )
                               ) {
                                 return

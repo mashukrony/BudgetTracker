@@ -6,7 +6,7 @@ import { upsertMonthlyBudget } from "@/app/actions/budgets"
 import { createCategory, deleteCategory, updateCategory } from "@/app/actions/categories"
 import { deleteNotification } from "@/app/actions/notifications"
 import { createSupportTicket } from "@/app/actions/support"
-import { createTransaction, deleteTransaction } from "@/app/actions/transactions"
+import { createTransaction, deleteTransaction, updateTransaction } from "@/app/actions/transactions"
 import { updateCurrency } from "@/app/actions/user-preferences"
 import { isIncomeCategoryName } from "@/lib/budget-constants"
 import type { UserBudgetSnapshot } from "@/lib/queries/user-snapshot"
@@ -17,6 +17,7 @@ import type {
   Transaction,
   TxType,
 } from "@/lib/types"
+import { NotificationAlertBanner } from "@/components/notification-alert-banner"
 
 type BudgetAppContextValue = UserBudgetSnapshot & {
   setMonthlyBudget: (amount: number) => Promise<void>
@@ -25,6 +26,7 @@ type BudgetAppContextValue = UserBudgetSnapshot & {
   updateCategory: (id: string, name: string, budget: number) => Promise<void>
   deleteCategory: (id: string) => Promise<void>
   addTransaction: (t: Omit<Transaction, "id">) => Promise<void>
+  updateTransaction: (id: string, t: Omit<Transaction, "id">) => Promise<void>
   deleteTransaction: (id: string) => Promise<void>
   deleteNotification: (id: string) => Promise<void>
   addSupportMessage: (input: { subject: string; message: string }) => Promise<void>
@@ -117,6 +119,23 @@ export function BudgetAppProvider({
     [router]
   )
 
+  const updateTransactionFn = React.useCallback(
+    async (id: string, partial: Omit<Transaction, "id">) => {
+      await runAction(
+        () =>
+          updateTransaction(id, {
+            title: partial.title,
+            categoryId: partial.categoryId,
+            date: partial.date,
+            amount: partial.amount,
+            type: partial.type as TxType,
+          }),
+        router
+      )
+    },
+    [router]
+  )
+
   const deleteNotificationFn = React.useCallback(
     async (id: string) => {
       await runAction(() => deleteNotification(id), router)
@@ -140,6 +159,7 @@ export function BudgetAppProvider({
       updateCategory: updateCategoryFn,
       deleteCategory: deleteCategoryFn,
       addTransaction: addTransactionFn,
+      updateTransaction: updateTransactionFn,
       deleteTransaction: deleteTransactionFn,
       deleteNotification: deleteNotificationFn,
       addSupportMessage,
@@ -153,13 +173,19 @@ export function BudgetAppProvider({
       updateCategoryFn,
       deleteCategoryFn,
       addTransactionFn,
+      updateTransactionFn,
       deleteTransactionFn,
       deleteNotificationFn,
       addSupportMessage,
     ]
   )
 
-  return <BudgetAppContext.Provider value={value}>{children}</BudgetAppContext.Provider>
+  return (
+    <BudgetAppContext.Provider value={value}>
+      <NotificationAlertBanner notifications={snapshot.notifications} />
+      {children}
+    </BudgetAppContext.Provider>
+  )
 }
 
 export function useBudgetApp() {

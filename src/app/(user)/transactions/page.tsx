@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { FileDown, FileText, Mic, Plus } from "lucide-react"
+import { FileDown, FileText, Mic, Pencil, Plus, Trash2 } from "lucide-react"
 import { useBudgetApp } from "@/contexts/budget-app-context"
 import { formatMoney } from "@/lib/format-money"
 import type { Transaction, TxType } from "@/lib/types"
@@ -41,7 +41,7 @@ function categoryNameById(categories: Category[], id: string | null, fallback: s
 }
 
 export default function TransactionsPage() {
-  const { currencyCode, categories, transactions, addTransaction, isIncomeCategory } =
+  const { currencyCode, categories, transactions, addTransaction, updateTransaction, deleteTransaction, isIncomeCategory } =
     useBudgetApp()
   const expenseCategories = React.useMemo(
     () => categories.filter((c) => !isIncomeCategory(c)),
@@ -55,6 +55,9 @@ export default function TransactionsPage() {
   const [to, setTo] = React.useState("")
   const [categoryFilter, setCategoryFilter] = React.useState<string>("all")
   const [addOpen, setAddOpen] = React.useState(false)
+  const [editTx, setEditTx] = React.useState<Transaction | null>(null)
+  const [deleteTx, setDeleteTx] = React.useState<Transaction | null>(null)
+  const [deleting, setDeleting] = React.useState(false)
 
   const filtered = React.useMemo(() => {
     return transactions.filter((t) => {
@@ -229,6 +232,7 @@ export default function TransactionsPage() {
                   <TableHead>Category</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -247,6 +251,27 @@ export default function TransactionsPage() {
                         {t.type === "income" ? "+" : "-"}
                         {formatMoney(t.amount, currencyCode)}
                       </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label={`Edit ${t.title}`}
+                            onClick={() => setEditTx(t)}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            className="text-muted-foreground hover:text-destructive"
+                            aria-label={`Delete ${t.title}`}
+                            onClick={() => setDeleteTx(t)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   )
                 })}
@@ -256,12 +281,13 @@ export default function TransactionsPage() {
         </CardContent>
       </Card>
 
-      <AddTransactionDialog
+      <TransactionDialog
+        mode="create"
         open={addOpen}
         onOpenChange={setAddOpen}
         expenseCategories={expenseCategories}
         incomeCategoryId={incomeCategoryId}
-        onAdd={async (row) => {
+        onSave={async (row) => {
           try {
             await addTransaction(row)
             setAddOpen(false)
@@ -270,6 +296,60 @@ export default function TransactionsPage() {
           }
         }}
       />
+
+      <TransactionDialog
+        mode="edit"
+        open={editTx !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditTx(null)
+        }}
+        transaction={editTx ?? undefined}
+        expenseCategories={expenseCategories}
+        incomeCategoryId={incomeCategoryId}
+        onSave={async (row) => {
+          if (!editTx) return
+          try {
+            await updateTransaction(editTx.id, row)
+            setEditTx(null)
+          } catch (err) {
+            window.alert(err instanceof Error ? err.message : "Could not update transaction.")
+          }
+        }}
+      />
+
+      <Dialog open={deleteTx !== null} onOpenChange={(open) => !open && setDeleteTx(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete transaction?</DialogTitle>
+            <DialogDescription>
+              {deleteTx
+                ? `"${deleteTx.title}" will be removed permanently.`
+                : "This action cannot be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTx(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting || !deleteTx}
+              onClick={() => {
+                if (!deleteTx) return
+                setDeleting(true)
+                void deleteTransaction(deleteTx.id)
+                  .then(() => setDeleteTx(null))
+                  .catch((err) =>
+                    window.alert(err instanceof Error ? err.message : "Could not delete transaction.")
+                  )
+                  .finally(() => setDeleting(false))
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -299,18 +379,22 @@ function StatMini({
   )
 }
 
-function AddTransactionDialog({
+function TransactionDialog({
+  mode,
   open,
   onOpenChange,
+  transaction,
   expenseCategories,
   incomeCategoryId,
-  onAdd,
+  onSave,
 }: {
+  mode: "create" | "edit"
   open: boolean
   onOpenChange: (o: boolean) => void
+  transaction?: Transaction
   expenseCategories: ReturnType<typeof useBudgetApp>["categories"]
   incomeCategoryId: string
-  onAdd: (t: Omit<Transaction, "id">) => void | Promise<void>
+  onSave: (t: Omit<Transaction, "id">) => void | Promise<void>
 }) {
   const [title, setTitle] = React.useState("")
   const [categoryId, setCategoryId] = React.useState("")
@@ -321,12 +405,20 @@ function AddTransactionDialog({
 
   React.useEffect(() => {
     if (!open) return
+    if (mode === "edit" && transaction) {
+      setTitle(transaction.title)
+      setCategoryId(transaction.categoryId)
+      setDate(transaction.date)
+      setAmount(String(transaction.amount))
+      setType(transaction.type)
+      return
+    }
     setCategoryId(expenseCategories[0]?.id ?? "")
     setTitle("")
     setAmount("")
     setType("expense")
     setDate(new Date().toISOString().slice(0, 10))
-  }, [open, expenseCategories])
+  }, [open, mode, transaction, expenseCategories])
 
   const startSpeech = () => {
     const w = typeof window !== "undefined" ? (window as SpeechRecognitionHost) : undefined
@@ -374,16 +466,18 @@ function AddTransactionDialog({
     if (!resolvedCategoryId) return
     setSaving(true)
     try {
-      await onAdd({
+      await onSave({
         title: title.trim(),
         categoryId: resolvedCategoryId,
         date,
         amount: n,
         type,
       })
-      setTitle("")
-      setAmount("")
-      setDate(new Date().toISOString().slice(0, 10))
+      if (mode === "create") {
+        setTitle("")
+        setAmount("")
+        setDate(new Date().toISOString().slice(0, 10))
+      }
     } finally {
       setSaving(false)
     }
@@ -393,25 +487,30 @@ function AddTransactionDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>New transaction</DialogTitle>
-          <DialogDescription>Use voice capture for faster entry where supported.</DialogDescription>
+          <DialogTitle>{mode === "edit" ? "Edit transaction" : "New transaction"}</DialogTitle>
+          <DialogDescription>
+            {mode === "edit"
+              ? "Update the details below and save your changes."
+              : "Use voice capture for faster entry where supported."}
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div className="flex gap-2">
-            <Button
-              type="button"
-              variant={listening ? "default" : "outline"}
-              className={listening ? "" : ""}
-              onClick={() => {
-                if (listening) return
-                startSpeech()
-              }}
-              aria-pressed={listening}
-              disabled={listening}
-            >
-              <Mic className={`size-4 ${listening ? "animate-pulse" : ""}`} />
-              Speak title & amount
-            </Button>
+            {mode === "create" ? (
+              <Button
+                type="button"
+                variant={listening ? "default" : "outline"}
+                onClick={() => {
+                  if (listening) return
+                  startSpeech()
+                }}
+                aria-pressed={listening}
+                disabled={listening}
+              >
+                <Mic className={`size-4 ${listening ? "animate-pulse" : ""}`} />
+                Speak title & amount
+              </Button>
+            ) : null}
           </div>
           <div className="grid gap-2">
             <Label htmlFor="t-title">Title</Label>
@@ -491,7 +590,7 @@ function AddTransactionDialog({
             disabled={saving || !canSave}
             onClick={() => void submit()}
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : mode === "edit" ? "Save changes" : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>

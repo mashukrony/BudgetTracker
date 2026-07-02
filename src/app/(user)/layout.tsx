@@ -6,6 +6,8 @@ import { ensureDbUser } from "@/lib/ensure-user"
 import { isAdminRole, resolveUserRole } from "@/lib/clerk-role"
 import { getUserBudgetSnapshot } from "@/lib/queries/user-snapshot"
 
+export const dynamic = "force-dynamic"
+
 export default async function UserLayout({ children }: { children: React.ReactNode }) {
   const { userId, sessionClaims } = await auth()
   if (!userId) redirect("/sign-in")

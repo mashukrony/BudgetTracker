@@ -5,7 +5,7 @@ import { requireDbSession } from "@/lib/auth-session"
 import { INCOME_CATEGORY_NAME, isIncomeCategoryName } from "@/lib/budget-constants"
 import { prisma } from "@/lib/prisma"
 import { mapCategory, mapTransaction, txTypeToDb } from "@/lib/mappers"
-import { endOfMonth, startOfMonth } from "@/lib/month-range"
+import { endOfMonth, parseDateInput, startOfMonth } from "@/lib/month-range"
 import { spendByCategory } from "@/lib/spend-utils"
 import type { TxType } from "@/lib/types"
 
@@ -19,6 +19,7 @@ const USER_PATHS = [
 ]
 
 function revalidateUserApp() {
+  revalidatePath("/dashboard", "layout")
   for (const path of USER_PATHS) revalidatePath(path)
 }
 
@@ -69,6 +70,45 @@ async function maybeCreateBudgetAlert(userId: string, categoryId: string) {
   })
 }
 
+async function resolveTransactionCategory(
+  userId: string,
+  type: TxType,
+  categoryId: string | undefined
+): Promise<{ ok: true; categoryId: string } | { ok: false; error: string }> {
+  let resolvedCategoryId = categoryId?.trim() ?? ""
+
+  if (type === "income") {
+    if (resolvedCategoryId) {
+      const category = await prisma.category.findFirst({
+        where: { id: resolvedCategoryId, userId },
+      })
+      if (!category) return { ok: false, error: "Category not found." }
+      if (!isIncomeCategoryName(category.name)) {
+        return { ok: false, error: "Income must use the Income category." }
+      }
+    } else {
+      const incomeCategory = await prisma.category.findFirst({
+        where: { userId, name: { equals: INCOME_CATEGORY_NAME, mode: "insensitive" } },
+      })
+      if (!incomeCategory) {
+        return { ok: false, error: "Income category not found. Sign out and back in to restore it." }
+      }
+      resolvedCategoryId = incomeCategory.id
+    }
+  } else {
+    if (!resolvedCategoryId) return { ok: false, error: "Category is required for expenses." }
+    const category = await prisma.category.findFirst({
+      where: { id: resolvedCategoryId, userId },
+    })
+    if (!category) return { ok: false, error: "Category not found." }
+    if (isIncomeCategoryName(category.name)) {
+      return { ok: false, error: "Choose an expense category, not Income." }
+    }
+  }
+
+  return { ok: true, categoryId: resolvedCategoryId }
+}
+
 export async function createTransaction(input: {
   title: string
   categoryId?: string
@@ -82,43 +122,16 @@ export async function createTransaction(input: {
     return { ok: false, error: "Enter a valid amount." }
   }
 
-  const parsedDate = new Date(input.date)
+  const parsedDate = parseDateInput(input.date)
   if (Number.isNaN(parsedDate.getTime())) {
     return { ok: false, error: "Enter a valid date." }
   }
 
   const { userId } = await requireDbSession()
 
-  let categoryId = input.categoryId?.trim() ?? ""
-
-  if (input.type === "income") {
-    if (categoryId) {
-      const category = await prisma.category.findFirst({
-        where: { id: categoryId, userId },
-      })
-      if (!category) return { ok: false, error: "Category not found." }
-      if (!isIncomeCategoryName(category.name)) {
-        return { ok: false, error: "Income must use the Income category." }
-      }
-    } else {
-      const incomeCategory = await prisma.category.findFirst({
-        where: { userId, name: { equals: INCOME_CATEGORY_NAME, mode: "insensitive" } },
-      })
-      if (!incomeCategory) {
-        return { ok: false, error: "Income category not found. Sign out and back in to restore it." }
-      }
-      categoryId = incomeCategory.id
-    }
-  } else {
-    if (!categoryId) return { ok: false, error: "Category is required for expenses." }
-    const category = await prisma.category.findFirst({
-      where: { id: categoryId, userId },
-    })
-    if (!category) return { ok: false, error: "Category not found." }
-    if (isIncomeCategoryName(category.name)) {
-      return { ok: false, error: "Choose an expense category, not Income." }
-    }
-  }
+  const categoryResult = await resolveTransactionCategory(userId, input.type, input.categoryId)
+  if (!categoryResult.ok) return categoryResult
+  const categoryId = categoryResult.categoryId
 
   await prisma.transaction.create({
     data: {
@@ -148,6 +161,54 @@ export async function deleteTransaction(
   if (!existing) return { ok: false, error: "Transaction not found." }
 
   await prisma.transaction.delete({ where: { id } })
+
+  revalidateUserApp()
+  return { ok: true }
+}
+
+export async function updateTransaction(
+  id: string,
+  input: {
+    title: string
+    categoryId?: string
+    date: string
+    amount: number
+    type: TxType
+  }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const title = input.title.trim()
+  if (!title) return { ok: false, error: "Title is required." }
+  if (!Number.isFinite(input.amount) || input.amount <= 0) {
+    return { ok: false, error: "Enter a valid amount." }
+  }
+
+  const parsedDate = parseDateInput(input.date)
+  if (Number.isNaN(parsedDate.getTime())) {
+    return { ok: false, error: "Enter a valid date." }
+  }
+
+  const { userId } = await requireDbSession()
+
+  const existing = await prisma.transaction.findFirst({ where: { id, userId } })
+  if (!existing) return { ok: false, error: "Transaction not found." }
+
+  const categoryResult = await resolveTransactionCategory(userId, input.type, input.categoryId)
+  if (!categoryResult.ok) return categoryResult
+
+  await prisma.transaction.update({
+    where: { id },
+    data: {
+      title,
+      categoryId: categoryResult.categoryId,
+      date: parsedDate,
+      amount: input.amount,
+      type: txTypeToDb(input.type),
+    },
+  })
+
+  if (input.type === "expense") {
+    await maybeCreateBudgetAlert(userId, categoryResult.categoryId)
+  }
 
   revalidateUserApp()
   return { ok: true }

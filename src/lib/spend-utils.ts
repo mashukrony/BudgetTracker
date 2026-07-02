@@ -1,4 +1,5 @@
 import { isIncomeCategoryName } from "@/lib/budget-constants"
+import { isDateInRange } from "@/lib/month-range"
 import type { Category, Transaction } from "@/lib/types"
 
 export function spendByCategory(
@@ -13,9 +14,7 @@ export function spendByCategory(
   const map: Record<string, number> = {}
   for (const t of transactions) {
     if (t.type !== "expense" || incomeIds.has(t.categoryId)) continue
-    const d = new Date(t.date)
-    if (monthStart && d < monthStart) continue
-    if (monthEnd && d > monthEnd) continue
+    if (monthStart && monthEnd && !isDateInRange(t.date, monthStart, monthEnd)) continue
     map[t.categoryId] = (map[t.categoryId] ?? 0) + t.amount
   }
   return map
@@ -33,9 +32,7 @@ export function sumIncome(
   return transactions
     .filter((t) => {
       if (t.type !== "income") return false
-      const d = new Date(t.date)
-      if (monthStart && d < monthStart) return false
-      if (monthEnd && d > monthEnd) return false
+      if (monthStart && monthEnd && !isDateInRange(t.date, monthStart, monthEnd)) return false
       return true
     })
     .reduce((s, t) => s + t.amount, 0)

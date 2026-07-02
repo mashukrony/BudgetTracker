@@ -14,6 +14,7 @@ export async function deleteNotification(
 
   await prisma.notification.delete({ where: { id } })
 
+  revalidatePath("/dashboard", "layout")
   revalidatePath("/notifications")
   return { ok: true }
 }

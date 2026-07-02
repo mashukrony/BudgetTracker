@@ -9,6 +9,7 @@ import { createSupportTicket } from "@/app/actions/support"
 import { createTransaction, deleteTransaction, updateTransaction } from "@/app/actions/transactions"
 import { updateCurrency } from "@/app/actions/user-preferences"
 import { isIncomeCategoryName } from "@/lib/budget-constants"
+import { withTransactions } from "@/lib/derive-snapshot-metrics"
 import type { UserBudgetSnapshot } from "@/lib/queries/user-snapshot"
 import type {
   AppNotification,
@@ -54,11 +55,13 @@ export function BudgetAppProvider({
   initial: UserBudgetSnapshot
 }) {
   const router = useRouter()
+  const [prevInitial, setPrevInitial] = React.useState(initial)
   const [snapshot, setSnapshot] = React.useState(initial)
 
-  React.useEffect(() => {
+  if (initial !== prevInitial) {
+    setPrevInitial(initial)
     setSnapshot(initial)
-  }, [initial])
+  }
 
   const setMonthlyBudget = React.useCallback(
     async (amount: number) => {
@@ -97,41 +100,60 @@ export function BudgetAppProvider({
 
   const addTransactionFn = React.useCallback(
     async (partial: Omit<Transaction, "id">) => {
-      await runAction(
-        () =>
-          createTransaction({
-            title: partial.title,
-            categoryId: partial.categoryId,
-            date: partial.date,
-            amount: partial.amount,
-            type: partial.type as TxType,
-          }),
-        router
+      const result = await createTransaction({
+        title: partial.title,
+        categoryId: partial.categoryId,
+        date: partial.date,
+        amount: partial.amount,
+        type: partial.type as TxType,
+      })
+      if (!result.ok) {
+        throw new Error(result.error ?? "Something went wrong.")
+      }
+      setSnapshot((prev) =>
+        withTransactions(prev, [result.transaction, ...prev.transactions])
       )
+      router.refresh()
     },
     [router]
   )
 
   const deleteTransactionFn = React.useCallback(
     async (id: string) => {
-      await runAction(() => deleteTransaction(id), router)
+      const result = await deleteTransaction(id)
+      if (!result.ok) {
+        throw new Error(result.error ?? "Something went wrong.")
+      }
+      setSnapshot((prev) =>
+        withTransactions(
+          prev,
+          prev.transactions.filter((t) => t.id !== id)
+        )
+      )
+      router.refresh()
     },
     [router]
   )
 
   const updateTransactionFn = React.useCallback(
     async (id: string, partial: Omit<Transaction, "id">) => {
-      await runAction(
-        () =>
-          updateTransaction(id, {
-            title: partial.title,
-            categoryId: partial.categoryId,
-            date: partial.date,
-            amount: partial.amount,
-            type: partial.type as TxType,
-          }),
-        router
+      const result = await updateTransaction(id, {
+        title: partial.title,
+        categoryId: partial.categoryId,
+        date: partial.date,
+        amount: partial.amount,
+        type: partial.type as TxType,
+      })
+      if (!result.ok) {
+        throw new Error(result.error ?? "Something went wrong.")
+      }
+      setSnapshot((prev) =>
+        withTransactions(
+          prev,
+          prev.transactions.map((t) => (t.id === id ? result.transaction : t))
+        )
       )
+      router.refresh()
     },
     [router]
   )

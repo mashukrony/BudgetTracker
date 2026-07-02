@@ -115,7 +115,9 @@ export async function createTransaction(input: {
   date: string
   amount: number
   type: TxType
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<
+  { ok: true; transaction: ReturnType<typeof mapTransaction> } | { ok: false; error: string }
+> {
   const title = input.title.trim()
   if (!title) return { ok: false, error: "Title is required." }
   if (!Number.isFinite(input.amount) || input.amount <= 0) {
@@ -133,7 +135,7 @@ export async function createTransaction(input: {
   if (!categoryResult.ok) return categoryResult
   const categoryId = categoryResult.categoryId
 
-  await prisma.transaction.create({
+  const created = await prisma.transaction.create({
     data: {
       title,
       categoryId,
@@ -149,12 +151,12 @@ export async function createTransaction(input: {
   }
 
   revalidateUserApp()
-  return { ok: true }
+  return { ok: true, transaction: mapTransaction(created) }
 }
 
 export async function deleteTransaction(
   id: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const { userId } = await requireDbSession()
 
   const existing = await prisma.transaction.findFirst({ where: { id, userId } })
@@ -163,7 +165,7 @@ export async function deleteTransaction(
   await prisma.transaction.delete({ where: { id } })
 
   revalidateUserApp()
-  return { ok: true }
+  return { ok: true, id }
 }
 
 export async function updateTransaction(
@@ -175,7 +177,9 @@ export async function updateTransaction(
     amount: number
     type: TxType
   }
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<
+  { ok: true; transaction: ReturnType<typeof mapTransaction> } | { ok: false; error: string }
+> {
   const title = input.title.trim()
   if (!title) return { ok: false, error: "Title is required." }
   if (!Number.isFinite(input.amount) || input.amount <= 0) {
@@ -195,7 +199,7 @@ export async function updateTransaction(
   const categoryResult = await resolveTransactionCategory(userId, input.type, input.categoryId)
   if (!categoryResult.ok) return categoryResult
 
-  await prisma.transaction.update({
+  const updated = await prisma.transaction.update({
     where: { id },
     data: {
       title,
@@ -211,5 +215,5 @@ export async function updateTransaction(
   }
 
   revalidateUserApp()
-  return { ok: true }
+  return { ok: true, transaction: mapTransaction(updated) }
 }

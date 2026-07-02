@@ -3,6 +3,7 @@
 import * as React from "react"
 import { FileDown, FileText, Mic, Pencil, Plus, Trash2 } from "lucide-react"
 import { useBudgetApp } from "@/contexts/budget-app-context"
+import { sortTransactions } from "@/lib/derive-snapshot-metrics"
 import { formatMoney } from "@/lib/format-money"
 import type { Transaction, TxType } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -60,12 +61,13 @@ export default function TransactionsPage() {
   const [deleting, setDeleting] = React.useState(false)
 
   const filtered = React.useMemo(() => {
-    return transactions.filter((t) => {
+    const rows = transactions.filter((t) => {
       if (categoryFilter !== "all" && t.categoryId !== categoryFilter) return false
       if (from && t.date < from) return false
       if (to && t.date > to) return false
       return true
     })
+    return sortTransactions(rows)
   }, [transactions, categoryFilter, from, to])
 
   const exportCsv = React.useCallback(() => {

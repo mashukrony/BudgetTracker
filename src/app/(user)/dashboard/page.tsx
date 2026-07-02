@@ -16,6 +16,7 @@ import {
 } from "recharts"
 import { Car, Pizza, ShoppingBag, TrendingUp, Tv, TrendingDown } from "lucide-react"
 import { useBudgetApp } from "@/contexts/budget-app-context"
+import { sortTransactions } from "@/lib/derive-snapshot-metrics"
 import { formatMoney } from "@/lib/format-money"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -106,9 +107,7 @@ export default function DashboardPage() {
     .sort((a, b) => b.pct - a.pct)
     .slice(0, 6)
 
-  const recent = [...transactions]
-    .sort((a, b) => (a.date < b.date ? 1 : -1))
-    .slice(0, 5)
+  const recent = sortTransactions(transactions).slice(0, 5)
 
   const budgetLabel = `${formatMoney(monthlyBudget, currencyCode)} monthly plan`
 
